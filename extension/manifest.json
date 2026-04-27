@@ -3,7 +3,7 @@
   "name": "Decathlon CA -> TR Price Compare",
   "version": "2.0.0",
   "description": "Decathlon Canada listeleme ve ürün sayfalarında, aynı ref id'ye sahip ürünün Türkiye fiyatını gösterir.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.decathlon.ca/*",
     "https://www.decathlon.com.tr/*"

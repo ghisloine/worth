@@ -16,7 +16,7 @@ Lokal sunucu, CSV upload, manuel eslestirme **yoktur**. Eklenti tamamen istemci 
 1. Chrome -> `chrome://extensions`
 2. Sag ust **Developer mode** acik
 3. **Load unpacked** -> bu repodaki `extension/` klasorunu sec
-4. Eklenti **Options** sayfasini ac, `CAD -> TRY` kurunu gir (orn. 25.00)
+4. Eklenti **Options** sayfasini ac, `CAD -> TRY` kurunu gir (orn. 33.00)
 
 ## Kullanim
 

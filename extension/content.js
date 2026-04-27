@@ -1,5 +1,6 @@
 const PRODUCT_LINK_SELECTOR = 'a[href*="/p/"], a[href*="/en/p/"], a[href*="/fr/p/"]';
 const BADGE_CLASS = 'dc-tr-compare-badge';
+const TR_BASE = 'https://www.decathlon.com.tr';
 
 function extractItemIdFromUrl(href) {
   if (!href) return null;
@@ -32,6 +33,15 @@ function parsePrice(text) {
   }
   const value = Number.parseFloat(normalized);
   return Number.isFinite(value) ? value : null;
+}
+
+function normalizeTrUrl(url) {
+  if (!url) return null;
+  try {
+    return new URL(url, TR_BASE).href;
+  } catch {
+    return null;
+  }
 }
 
 function findNearestProductContainer(link) {
@@ -72,6 +82,13 @@ function buildComparisonMessage(result, cadToTryRate, caFallbackPrice) {
   if (result.status === 'NOT_SELLING_IN_TURKEY') {
     return { text: 'TR: Satılmıyor', tone: 'warning' };
   }
+  if (result.status === 'ACCESS_BLOCKED') {
+    return {
+      text: 'TR: doğrulama gerekiyor',
+      tone: 'warning',
+      title: 'Decathlon Türkiye erişimi doğrulamaya takıldı. Bir TR ürün sayfası açıp sayfayı yenileyin.'
+    };
+  }
   if (result.status === 'ERROR') {
     return { text: 'TR: API hatası', tone: 'warning', title: result.error || '' };
   }
@@ -80,7 +97,7 @@ function buildComparisonMessage(result, cadToTryRate, caFallbackPrice) {
   }
 
   const trPrice = parsePrice(result.turkey?.price);
-  const trUrl = result.turkey?.url || null;
+  const trUrl = normalizeTrUrl(result.turkey?.url);
 
   if (!Number.isFinite(trPrice)) {
     return {
@@ -97,21 +114,28 @@ function buildComparisonMessage(result, cadToTryRate, caFallbackPrice) {
 
   const convertedCa = caPrice * cadToTryRate;
   const diff = trPrice - convertedCa;
+  const caToTlText = `CA->TL: ${convertedCa.toFixed(2)} TRY`;
+  const trText = `TR: ${trPrice.toFixed(2)} TRY`;
   const tooltip = `CA ${caPrice.toFixed(2)} CAD * ${cadToTryRate} = ${convertedCa.toFixed(2)} TRY  |  TR ${trPrice.toFixed(2)} TRY`;
 
   if (Math.abs(diff) / Math.max(convertedCa, 1) < 0.02) {
-    return { text: `TR: ${trPrice.toFixed(2)} TRY (yaklaşık aynı)`, tone: 'neutral', href: trUrl, title: tooltip };
+    return {
+      text: `${caToTlText} | ${trText} (yaklaşık aynı)`,
+      tone: 'neutral',
+      href: trUrl,
+      title: tooltip
+    };
   }
   if (diff < 0) {
     return {
-      text: `TR: ${trPrice.toFixed(2)} TRY • daha ucuz (${Math.abs(diff).toFixed(2)} TRY)`,
+      text: `${caToTlText} | ${trText} • ${Math.abs(diff).toFixed(2)} TRY daha ucuz`,
       tone: 'good',
       href: trUrl,
       title: tooltip
     };
   }
   return {
-    text: `TR: ${trPrice.toFixed(2)} TRY • daha pahalı (+${diff.toFixed(2)} TRY)`,
+    text: `${caToTlText} | ${trText} • +${diff.toFixed(2)} TRY daha pahalı`,
     tone: 'bad',
     href: trUrl,
     title: tooltip
@@ -119,7 +143,7 @@ function buildComparisonMessage(result, cadToTryRate, caFallbackPrice) {
 }
 
 async function getSettings() {
-  return chrome.storage.sync.get({ cadToTryRate: 25 });
+  return chrome.storage.sync.get({ cadToTryRate: 33 });
 }
 
 async function annotateProducts() {
