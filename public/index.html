@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decathlon Live Compare API</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Decathlon Canada → TR Live Compare</h1>
+      <p class="subtitle">Item ID gir ve canlı olarak TR'de satılıyor mu + daha düşük/yüksek bilgisini gör.</p>
+
+      <section class="card">
+        <h2>Item IDs</h2>
+        <label for="itemIds">Her satıra bir item id (veya virgül ile)</label>
+        <textarea id="itemIds" rows="8" placeholder="8553203\n8734561"></textarea>
+        <button id="compareBtn">Canlı Karşılaştır</button>
+      </section>
+
+      <section class="card">
+        <h2>Sonuçlar</h2>
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
