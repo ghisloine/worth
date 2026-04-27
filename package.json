@@ -1,0 +1,11 @@
+{
+  "name": "decathlon-canada-turkey-comparer",
+  "version": "1.0.0",
+  "description": "Compare Decathlon item IDs between Canada and Turkey catalogs",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  }
+}
