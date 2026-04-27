@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decathlon Compare Ayarları</title>
+    <style>
+      body { font-family: Inter, Arial, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+      label { display:block; margin: 14px 0 6px; font-weight: 600; }
+      input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
+      button { margin-top: 16px; padding: 10px 14px; border: 0; border-radius: 8px; background: #1d4ed8; color: #fff; font-weight: 700; }
+      #status { margin-top: 10px; color: #047857; }
+    </style>
+  </head>
+  <body>
+    <h1>Decathlon Canada → TR Compare Ayarları</h1>
+    <p>Extension, Decathlon Canada ürün kartlarına Türkiye fiyatı ve “daha ucuz/pahalı” bilgisini ekler.</p>
+
+    <label for="apiBaseUrl">Karşılaştırma API adresi</label>
+    <input id="apiBaseUrl" placeholder="http://127.0.0.1:3000" />
+
+    <label for="cadToTryRate">CAD → TRY kuru (karşılaştırma için)</label>
+    <input id="cadToTryRate" type="number" step="0.01" placeholder="25" />
+
+    <button id="saveBtn">Kaydet</button>
+    <p id="status"></p>
+
+    <script src="options.js"></script>
+  </body>
+</html>
