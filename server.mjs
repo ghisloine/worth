@@ -204,20 +204,34 @@ async function fetchHtml(url) {
 }
 
 async function findCanadaProduct(itemId) {
-  const url = `https://www.decathlon.ca/en/search?query=${encodeURIComponent(itemId)}`;
-  const html = await fetchHtml(url);
-  const product = pickProductFromLdJson(html, itemId);
+  const candidateUrls = [
+    `https://www.decathlon.ca/en/p/${encodeURIComponent(itemId)}`,
+    `https://www.decathlon.ca/en/search?query=${encodeURIComponent(itemId)}`
+  ];
 
-  if (product) {
-    return { ...product, source: url };
-  }
+  for (const url of candidateUrls) {
+    try {
+      const html = await fetchHtml(url);
+      const product = pickProductFromLdJson(html, itemId);
 
-  const fallbackProduct = fallbackProductFromHtml(html, itemId, {
-    defaultCurrency: 'CAD',
-    symbol: '$'
-  });
-  if (fallbackProduct) {
-    return { ...fallbackProduct, source: url };
+      if (product) {
+        return { ...product, source: url };
+      }
+
+      const fallbackProduct = fallbackProductFromHtml(html, itemId, {
+        defaultCurrency: 'CAD',
+        symbol: '$'
+      });
+      if (fallbackProduct && html.includes(itemId)) {
+        return {
+          ...fallbackProduct,
+          url: fallbackProduct.url || url,
+          source: url
+        };
+      }
+    } catch {
+      // try next URL
+    }
   }
 
   return null;
@@ -226,7 +240,8 @@ async function findCanadaProduct(itemId) {
 async function findTurkeyProduct(itemId) {
   const candidateUrls = [
     `https://www.decathlon.com.tr/search?Ntt=${encodeURIComponent(itemId)}`,
-    `https://www.decathlon.com.tr/search?query=${encodeURIComponent(itemId)}`
+    `https://www.decathlon.com.tr/search?query=${encodeURIComponent(itemId)}`,
+    `https://www.decathlon.com.tr/search?q=${encodeURIComponent(itemId)}`
   ];
 
   for (const url of candidateUrls) {
@@ -241,7 +256,7 @@ async function findTurkeyProduct(itemId) {
         defaultCurrency: 'TRY',
         symbol: '₺'
       });
-      if (fallbackProduct && hasReferenceId(html, itemId)) {
+      if (fallbackProduct && (hasReferenceId(html, itemId) || html.includes(itemId))) {
         return {
           ...fallbackProduct,
           url: fallbackProduct.url || url,
