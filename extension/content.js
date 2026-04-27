@@ -1,18 +1,35 @@
-const PRODUCT_LINK_SELECTOR = 'a[href*="/p/"]';
+const PRODUCT_LINK_SELECTOR = 'a[href*="/p/"], a[href*="/en/p/"], a[href*="/fr/p/"]';
 const BADGE_CLASS = 'dc-tr-compare-badge';
 
 function extractItemIdFromUrl(href) {
-  const clean = href.split('?')[0];
-  const match = clean.match(/(\d{6,})/g);
-  if (!match?.length) {
+  if (!href) return null;
+  try {
+    const url = new URL(href, location.origin);
+    const segments = url.pathname.split('/').filter(Boolean);
+    const pIndex = segments.lastIndexOf('p');
+    if (pIndex >= 0 && segments[pIndex + 1]) {
+      const candidate = segments[pIndex + 1].match(/\d{6,8}/);
+      if (candidate) return candidate[0];
+    }
+    const all = url.pathname.match(/\d{6,8}/g);
+    return all ? all[all.length - 1] : null;
+  } catch {
     return null;
   }
-  return match[match.length - 1];
 }
 
 function parsePrice(text) {
-  if (!text) return null;
-  const normalized = text.replace(/[^\d.,]/g, '').replace(',', '.');
+  if (text == null) return null;
+  const raw = String(text).replace(/[^\d.,-]/g, '');
+  if (!raw) return null;
+  const lastComma = raw.lastIndexOf(',');
+  const lastDot = raw.lastIndexOf('.');
+  let normalized;
+  if (lastComma > lastDot) {
+    normalized = raw.replace(/\./g, '').replace(',', '.');
+  } else {
+    normalized = raw.replace(/,/g, '');
+  }
   const value = Number.parseFloat(normalized);
   return Number.isFinite(value) ? value : null;
 }
@@ -23,7 +40,7 @@ function findNearestProductContainer(link) {
 
 function findCaPrice(container) {
   const text = container?.innerText || '';
-  const candidates = text.match(/\$\s?\d+[\d.,]*/g);
+  const candidates = text.match(/\$\s?\d[\d.,]*/g);
   if (!candidates?.length) return null;
   return parsePrice(candidates[0]);
 }
@@ -31,64 +48,78 @@ function findCaPrice(container) {
 function ensureBadge(container) {
   let badge = container.querySelector(`.${BADGE_CLASS}`);
   if (!badge) {
-    badge = document.createElement('div');
+    badge = document.createElement('a');
     badge.className = BADGE_CLASS;
+    badge.target = '_blank';
+    badge.rel = 'noopener noreferrer';
     container.appendChild(badge);
   }
   return badge;
 }
 
-function setBadgeText(badge, text, tone = 'neutral') {
+function setBadge(badge, { text, tone = 'neutral', href = null, title = '' }) {
   badge.textContent = text;
   badge.setAttribute('data-tone', tone);
+  badge.title = title || text;
+  if (href) {
+    badge.setAttribute('href', href);
+  } else {
+    badge.removeAttribute('href');
+  }
 }
 
 function buildComparisonMessage(result, cadToTryRate, caFallbackPrice) {
   if (result.status === 'NOT_SELLING_IN_TURKEY') {
     return { text: 'TR: Satılmıyor', tone: 'warning' };
   }
-
+  if (result.status === 'ERROR') {
+    return { text: 'TR: API hatası', tone: 'warning', title: result.error || '' };
+  }
   if (result.status !== 'MATCHED') {
-    return { text: 'Karşılaştırma bulunamadı', tone: 'neutral' };
+    return { text: 'TR eşleşmesi bulunamadı', tone: 'neutral' };
   }
 
-  const caPrice = parsePrice(result.canada?.price) ?? caFallbackPrice;
   const trPrice = parsePrice(result.turkey?.price);
+  const trUrl = result.turkey?.url || null;
 
-  if (!Number.isFinite(caPrice) || !Number.isFinite(trPrice)) {
+  if (!Number.isFinite(trPrice)) {
     return {
-      text: `TR: ${result.turkey?.price || '?'} ${result.turkey?.currency || ''}`,
-      tone: 'neutral'
+      text: result.turkey?.available === false ? 'TR: Stokta yok' : 'TR: fiyat bilgisi yok',
+      tone: 'neutral',
+      href: trUrl
     };
+  }
+
+  const caPrice = caFallbackPrice;
+  if (!Number.isFinite(caPrice) || !cadToTryRate) {
+    return { text: `TR: ${trPrice.toFixed(2)} TRY`, tone: 'neutral', href: trUrl };
   }
 
   const convertedCa = caPrice * cadToTryRate;
   const diff = trPrice - convertedCa;
+  const tooltip = `CA ${caPrice.toFixed(2)} CAD * ${cadToTryRate} = ${convertedCa.toFixed(2)} TRY  |  TR ${trPrice.toFixed(2)} TRY`;
 
-  if (Math.abs(diff) < 0.5) {
-    return {
-      text: `TR: ${trPrice.toFixed(2)} TRY (yaklaşık aynı)` ,
-      tone: 'neutral'
-    };
+  if (Math.abs(diff) / Math.max(convertedCa, 1) < 0.02) {
+    return { text: `TR: ${trPrice.toFixed(2)} TRY (yaklaşık aynı)`, tone: 'neutral', href: trUrl, title: tooltip };
   }
-
   if (diff < 0) {
     return {
       text: `TR: ${trPrice.toFixed(2)} TRY • daha ucuz (${Math.abs(diff).toFixed(2)} TRY)`,
-      tone: 'good'
+      tone: 'good',
+      href: trUrl,
+      title: tooltip
     };
   }
-
   return {
     text: `TR: ${trPrice.toFixed(2)} TRY • daha pahalı (+${diff.toFixed(2)} TRY)`,
-    tone: 'bad'
+    tone: 'bad',
+    href: trUrl,
+    title: tooltip
   };
 }
 
 async function getSettings() {
-  return chrome.storage.sync.get({
-    cadToTryRate: 25
-  });
+  return chrome.storage.sync.get({ cadToTryRate: 25 });
 }
 
 async function annotateProducts() {
@@ -98,36 +129,32 @@ async function annotateProducts() {
 
   for (const link of links) {
     const itemId = extractItemIdFromUrl(link.href);
-    if (!itemId || seen.has(itemId)) {
-      continue;
-    }
+    if (!itemId || seen.has(itemId)) continue;
 
     const container = findNearestProductContainer(link);
-    if (!container) {
-      continue;
-    }
+    if (!container) continue;
 
     seen.add(itemId);
     const caPrice = findCaPrice(container);
     const badge = ensureBadge(container);
-    setBadgeText(badge, 'TR fiyatı yükleniyor...', 'neutral');
+    if (!badge.dataset.loaded) {
+      setBadge(badge, { text: 'TR fiyatı yükleniyor...', tone: 'neutral' });
+    }
     products.push({ itemId, container, badge, caPrice });
   }
 
-  if (!products.length) {
-    return;
-  }
+  if (!products.length) return;
 
   const response = await new Promise((resolve) => {
-    chrome.runtime.sendMessage({
-      type: 'compareItems',
-      itemIds: products.map((p) => p.itemId)
-    }, resolve);
+    chrome.runtime.sendMessage(
+      { type: 'compareItems', itemIds: products.map((p) => p.itemId) },
+      resolve
+    );
   });
 
   if (!response?.ok) {
     for (const p of products) {
-      setBadgeText(p.badge, `Hata: ${response?.error || 'sunucuya bağlanamadı'}`, 'warning');
+      setBadge(p.badge, { text: `Hata: ${response?.error || 'TR sorgusu'}`, tone: 'warning' });
     }
     return;
   }
@@ -138,12 +165,12 @@ async function annotateProducts() {
   for (const p of products) {
     const result = resultMap.get(p.itemId);
     if (!result) {
-      setBadgeText(p.badge, 'TR eşleşmesi bulunamadı', 'neutral');
+      setBadge(p.badge, { text: 'TR eşleşmesi bulunamadı', tone: 'neutral' });
       continue;
     }
-
-    const message = buildComparisonMessage(result, Number(cadToTryRate) || 25, p.caPrice);
-    setBadgeText(p.badge, message.text, message.tone);
+    const message = buildComparisonMessage(result, Number(cadToTryRate) || 0, p.caPrice);
+    setBadge(p.badge, message);
+    p.badge.dataset.loaded = '1';
   }
 }
 
@@ -154,7 +181,7 @@ function scheduleAnnotate() {
     annotateProducts().catch((error) => {
       console.error('[dc-tr-compare]', error);
     });
-  }, 800);
+  }, 600);
 }
 
 const observer = new MutationObserver(scheduleAnnotate);

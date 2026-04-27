@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Decathlon Canada -> TR Price Compare",
-  "version": "1.1.0",
-  "description": "Decathlon Canada listeleme sayfalarında TR fiyatını ve daha ucuz/pahalı bilgisini gösterir.",
+  "name": "Decathlon CA -> TR Price Compare",
+  "version": "2.0.0",
+  "description": "Decathlon Canada listeleme ve ürün sayfalarında, aynı ref id'ye sahip ürünün Türkiye fiyatını gösterir.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.decathlon.ca/*",
-    "http://127.0.0.1:3000/*",
-    "http://localhost:3000/*"
+    "https://www.decathlon.com.tr/*"
   ],
   "background": {
     "service_worker": "background.js"
