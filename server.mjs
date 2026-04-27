@@ -97,7 +97,14 @@ function pickProductFromLdJson(html, itemId) {
 
         const looksLikeMatch = textIndex.includes(itemId);
         const hasOffer = Boolean(node.offers?.price || node.price || node.lowPrice);
-        if (!looksLikeMatch || !hasOffer) {
+        if (!hasOffer) {
+          continue;
+        }
+
+        // In some Decathlon pages, ref/id is not always exposed in JSON-LD.
+        // If there is only one product-like block, still accept it.
+        const allowSingleProductFallback = nodes.length === 1;
+        if (!looksLikeMatch && !allowSingleProductFallback) {
           continue;
         }
 
@@ -128,6 +135,60 @@ function fallbackPriceFromHtml(html) {
   };
 }
 
+function fallbackPriceBySymbol(html, symbol) {
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`${escaped}\\s*([\\d.,]+)`));
+  return match ? parsePrice(match[1]) : null;
+}
+
+function fallbackNameFromHtml(html) {
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1?.[1]) {
+    return h1[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (title?.[1]) {
+    return title[1].replace(/\s+/g, ' ').trim();
+  }
+
+  return '';
+}
+
+function fallbackCanonicalUrl(html) {
+  const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+  if (canonical?.[1]) {
+    return canonical[1];
+  }
+
+  const ogUrl = html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i);
+  return ogUrl?.[1] || '';
+}
+
+function hasReferenceId(html, itemId) {
+  const refRegex = new RegExp(`(?:Ref\\.?\\s*:\\s*|text_ref[^\\d]{0,20})${itemId}`, 'i');
+  return refRegex.test(html);
+}
+
+function fallbackProductFromHtml(html, itemId, { defaultCurrency = '', symbol = '' } = {}) {
+  const byJson = fallbackPriceFromHtml(html);
+  const bySymbol = symbol ? fallbackPriceBySymbol(html, symbol) : null;
+  const price = byJson.price ?? bySymbol;
+  const currency = byJson.currency || defaultCurrency;
+
+  if (!price) {
+    return null;
+  }
+
+  return {
+    item_id: itemId,
+    name: fallbackNameFromHtml(html),
+    price,
+    currency,
+    url: fallbackCanonicalUrl(html) || ''
+  };
+}
+
 async function fetchHtml(url) {
   const response = await fetch(url, {
     headers: {
@@ -151,16 +212,12 @@ async function findCanadaProduct(itemId) {
     return { ...product, source: url };
   }
 
-  const fallback = fallbackPriceFromHtml(html);
-  if (fallback.price) {
-    return {
-      item_id: itemId,
-      name: '',
-      price: fallback.price,
-      currency: fallback.currency || 'CAD',
-      url,
-      source: url
-    };
+  const fallbackProduct = fallbackProductFromHtml(html, itemId, {
+    defaultCurrency: 'CAD',
+    symbol: '$'
+  });
+  if (fallbackProduct) {
+    return { ...fallbackProduct, source: url };
   }
 
   return null;
@@ -180,14 +237,14 @@ async function findTurkeyProduct(itemId) {
         return { ...product, source: url };
       }
 
-      const fallback = fallbackPriceFromHtml(html);
-      if (fallback.price) {
+      const fallbackProduct = fallbackProductFromHtml(html, itemId, {
+        defaultCurrency: 'TRY',
+        symbol: '₺'
+      });
+      if (fallbackProduct && hasReferenceId(html, itemId)) {
         return {
-          item_id: itemId,
-          name: '',
-          price: fallback.price,
-          currency: fallback.currency || 'TRY',
-          url,
+          ...fallbackProduct,
+          url: fallbackProduct.url || url,
           source: url
         };
       }
